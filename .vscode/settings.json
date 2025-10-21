@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "signal.h": "c",
+        "string.h": "c",
+        "application_layer.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "enabledIfIncludesResolve"
+}
