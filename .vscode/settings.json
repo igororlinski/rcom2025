@@ -2,7 +2,9 @@
     "files.associations": {
         "signal.h": "c",
         "string.h": "c",
-        "application_layer.h": "c"
+        "application_layer.h": "c",
+        "unistd.h": "c",
+        "stdlib.h": "c"
     },
     "C_Cpp.errorSquiggles": "enabledIfIncludesResolve"
 }

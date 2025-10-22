@@ -32,5 +32,26 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     
     printf("Connection established successfully!\n");
     
-    llclose();
+    if (strcmp(role, "tx") == 0) {
+        unsigned char testData[] = "Hello from transmitter!";
+        int writeResult = llwrite(testData, sizeof(testData) - 1);
+        if (writeResult > 0) {
+            printf("Successfully sent %d bytes\n", writeResult);
+        } else {
+            printf("Failed to send data\n");
+        }
+    } else {
+        unsigned char buffer[MAX_PAYLOAD_SIZE];
+        int readResult = llread(buffer);
+        if (readResult > 0) {
+            buffer[readResult] = '\0';
+            printf("Received %d bytes: %s\n", readResult, buffer);
+        } else if (readResult == 0) {
+            printf("Connection closed by transmitter\n");
+        } else {
+            printf("Failed to receive data\n");
+        }
+    }
+    
+    llclose(connectionParameters);
 }
