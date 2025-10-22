@@ -227,7 +227,8 @@ int llwrite(const unsigned char *buf, int bufSize)
                     else if (byte != FLAG) state = START;
                     break;
                 case A_RCV:
-                    if (byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1)) {
+                    if (byte == C_RR(0) || byte == C_RR(1) ||
+                        byte == C_REJ(0) || byte == C_REJ(1)) {
                         cField = byte;
                         state = C_RCV;
                     } else if (byte == FLAG) state = FLAG_RCV;
@@ -240,20 +241,17 @@ int llwrite(const unsigned char *buf, int bufSize)
                     break;
                 case BCC1_OK:
                     if (byte == FLAG) {
-                        // Otrzymano RR/REJ – poprawne sprawdzenie numeru sekwencji
-                        if (cField == C_RR(tramaTx)) {
-                            printf("Received RR%d → frame accepted\n", tramaTx);
+                        if (cField == C_RR((tramaTx + 1) % 2)) {
+                            printf("Received RR%d → frame accepted\n", (tramaTx + 1) % 2);
                             tramaTx = (tramaTx + 1) % 2;
                             ackReceived = TRUE;
                         } else if (cField == C_REJ(tramaTx)) {
                             printf("Received REJ%d → retransmitting\n", tramaTx);
-                            break; // retransmit
-                        } else {
-                            printf("Unexpected frame 0x%02X → ignored\n", cField);
                         }
                     }
                     state = START;
                     break;
+
                 default:
                     state = START;
                     break;
@@ -273,7 +271,6 @@ int llwrite(const unsigned char *buf, int bufSize)
 
     return bufSize;
 }
-
 
 ////////////////////////////////////////////////
 // LLREAD
@@ -330,12 +327,12 @@ int llread(unsigned char *packet)
 
                         unsigned char rrFrame[5] = {
                             FLAG, ADDRESS_RT,
-                            C_RR(ns),
-                            ADDRESS_RT ^ C_RR(ns),
+                            C_RR(expectedNext),
+                            ADDRESS_RT ^ C_RR(expectedNext),
                             FLAG
                         };
                         writeBytesSerialPort(rrFrame, 5);
-                        printf("Sent RR%d acknowledgment\n", ns);
+                        printf("Sent RR%d acknowledgment\n", expectedNext);
                         tramaRx = expectedNext;
                         return packetSize;
                     } else {
