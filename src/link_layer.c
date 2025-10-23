@@ -212,32 +212,38 @@ int llwrite(const unsigned char *buf, int bufSize)
             if (elapsed > timeout) break;
 
             if (readByteSerialPort(&byte) <= 0) {
-                usleep(10000);
-                continue;
+               usleep(100);
+               continue;
             }
 
             switch (state) {
                 case START:
+                    printf("I start");
                     if (byte == FLAG) state = FLAG_RCV;
-                    break;
-                case FLAG_RCV:
-                    if (byte == ADDRESS_RT) state = A_RCV;
-                    else if (byte != FLAG) state = START;
-                    break;
-                case A_RCV:
-                    if (byte == C_RR(0) || byte == C_RR(1) ||
-                        byte == C_REJ(0) || byte == C_REJ(1)) {
-                        cField = byte;
-                        state = C_RCV;
-                    } else if (byte == FLAG) state = FLAG_RCV;
                     else state = START;
                     break;
+                case FLAG_RCV:
+                    printf("I continue");
+                    if (byte == ADDRESS_RT) state = A_RCV;
+                    else state = START;
+                    break;
+                case A_RCV:
+                    printf("I continue3");
+                    if (byte == C_RR(0) || byte == C_RR(1) ||
+                        byte == C_REJ(0) || byte == C_REJ(1)) {
+                        printf("Correct");
+                        cField = byte;
+                        state = C_RCV;
+                    } else {state = START;
+                    printf("Incorrect, %c", byte);}
+                    break;
                 case C_RCV:
+                    printf("I continue4");
                     if (byte == (ADDRESS_RT ^ cField)) state = BCC1_OK;
-                    else if (byte == FLAG) state = FLAG_RCV;
                     else state = START;
                     break;
                 case BCC1_OK:
+                   printf("I continue5");
                     if (byte == FLAG) {
                         if (cField == C_RR((tramaTx + 1) % 2)) {
                             printf("Received RR%d → frame accepted\n", (tramaTx + 1) % 2);
@@ -246,7 +252,7 @@ int llwrite(const unsigned char *buf, int bufSize)
                         } else if (cField == C_REJ(tramaTx)) {
                             printf("Received REJ%d → retransmitting\n", tramaTx);
                         }
-                    }
+                    } else
                     state = START;
                     break;
 
@@ -329,6 +335,8 @@ int llread(unsigned char *packet)
                             ADDRESS_RT ^ C_RR(expectedNext),
                             FLAG
                         };
+                        printf("Expected next: %d", expectedNext);
+                        printf("Sending %c", rrFrame[2]);
                         writeBytesSerialPort(rrFrame, 5);
                         printf("Sent RR%d acknowledgment\n", expectedNext);
                         tramaRx = expectedNext;
