@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BLOCK_SIZE 128 
+#define BLOCK_SIZE 64 
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)

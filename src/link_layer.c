@@ -17,10 +17,9 @@
 #include "serial_port.h"
 
 
-// Stałe kontrolne
 const char FLAG = 0x7E;
-const char ADDRESS_TR = 0x03;  // Transmitter -> Receiver (Commands)
-const char ADDRESS_RT = 0x01;  // Receiver -> Transmitter (Replies)
+const char ADDRESS_TR = 0x03;  
+const char ADDRESS_RT = 0x01;  
 const char CONTROL_SET = 0x03;
 const char CONTROL_UA = 0x07;
 const char CONTROL_DISC = 0x0B;
@@ -29,7 +28,6 @@ const char CONTROL_RR1 = 0x85;
 const char CONTROL_REJ0 = 0x01;
 const char CONTROL_REJ1 = 0x81;
 
-// Makra pomocnicze
 #define C_RR(s) (((s) == 0) ? CONTROL_RR0 : CONTROL_RR1)
 #define C_REJ(s) (((s) == 0) ? CONTROL_REJ0 : CONTROL_REJ1)
 #define C_N(s) (((s) == 0) ? 0x00 : 0x40)
@@ -115,7 +113,7 @@ int llopen(LinkLayer connectionParameters)
                         if (byte == FLAG) {
                             printf("Received UA frame. Connection established.\n");
                             STOP = 1;
-                        }
+                        } else state = 0;
                         break;
                 }
             }
@@ -146,7 +144,7 @@ int llopen(LinkLayer connectionParameters)
                 if (byte == FLAG) {
                     printf("Received SET frame. Sending UA response.\n");
                     STOP = 1;
-                }
+                } else state = 0;
                 break;
         }
     }
@@ -401,17 +399,17 @@ int llclose(LinkLayer connectionParameters)
                 if (readByteSerialPort(&byte) <= 0) continue;
                 printf("Byte received = 0x%02X\n", byte);
                 switch (state) {
-                    case 0: if (byte == FLAG) state = 1; break;
-                    case 1: if (byte == ADDRESS_RT) state = 2; break;
-                    case 2: if (byte == CONTROL_DISC) state = 3; break;
+                    case 0: if (byte == FLAG) state = 1; else state = 0; break;
+                    case 1: if (byte == ADDRESS_RT) state = 2; else state = 0; break;
+                    case 2: if (byte == CONTROL_DISC) state = 3; else state = 0; break;
                     case 3:
-                        if (byte == (ADDRESS_RT ^ CONTROL_DISC)) state = 4;
-                        break;
+                        if (byte == (ADDRESS_RT ^ CONTROL_DISC)) state = 4; else state = 0; break;
                     case 4:
                         if (byte == FLAG) {
                             printf("Received DISC from Receiver. Sending UA.\n");
                             STOP = 1;
                         }
+                        else state = 0; 
                         break;
                 }
             }
@@ -442,7 +440,7 @@ int llclose(LinkLayer connectionParameters)
                     if (byte == FLAG) {
                         printf("Received DISC from Transmitter. Responding with DISC.\n");
                         STOP = 1;
-                    }
+                    } else state = 0; 
                     break;
             }
         }
