@@ -17,19 +17,17 @@
 #include "serial_port.h"
 
 
-// Stałe kontrolne
-const char FLAG = 0x7E;
-const char ADDRESS_TR = 0x03;  // Transmitter -> Receiver (Commands)
-const char ADDRESS_RT = 0x01;  // Receiver -> Transmitter (Replies)
-const char CONTROL_SET = 0x03;
-const char CONTROL_UA = 0x07;
-const char CONTROL_DISC = 0x0B;
-const char CONTROL_RR0 = 0x05;
-const char CONTROL_RR1 = 0x85;
-const char CONTROL_REJ0 = 0x01;
-const char CONTROL_REJ1 = 0x81;
+const unsigned char FLAG = 0x7E;
+const unsigned char ADDRESS_TR = 0x03;  
+const unsigned char ADDRESS_RT = 0x01;  
+const unsigned char CONTROL_SET = 0x03;
+const unsigned char CONTROL_UA = 0x07;
+const unsigned char CONTROL_DISC = 0x0B;
+const unsigned char CONTROL_RR0 = 0x05;
+const unsigned char CONTROL_RR1 = 0x85;
+const unsigned char CONTROL_REJ0 = 0x01;
+const unsigned char CONTROL_REJ1 = 0x81;
 
-// Makra pomocnicze
 #define C_RR(s) (((s) == 0) ? CONTROL_RR0 : CONTROL_RR1)
 #define C_REJ(s) (((s) == 0) ? CONTROL_REJ0 : CONTROL_REJ1)
 #define C_N(s) (((s) == 0) ? 0x00 : 0x40)
@@ -115,7 +113,7 @@ int llopen(LinkLayer connectionParameters)
                         if (byte == FLAG) {
                             printf("Received UA frame. Connection established.\n");
                             STOP = 1;
-                        }
+                        } else state = 0;
                         break;
                 }
             }
@@ -146,7 +144,7 @@ int llopen(LinkLayer connectionParameters)
                 if (byte == FLAG) {
                     printf("Received SET frame. Sending UA response.\n");
                     STOP = 1;
-                }
+                } else state = 0;
                 break;
         }
     }
@@ -214,32 +212,38 @@ int llwrite(const unsigned char *buf, int bufSize)
             if (elapsed > timeout) break;
 
             if (readByteSerialPort(&byte) <= 0) {
-                usleep(10000);
-                continue;
+               usleep(100);
+               continue;
             }
 
             switch (state) {
                 case START:
+                    printf("I start");
                     if (byte == FLAG) state = FLAG_RCV;
-                    break;
-                case FLAG_RCV:
-                    if (byte == ADDRESS_RT) state = A_RCV;
-                    else if (byte != FLAG) state = START;
-                    break;
-                case A_RCV:
-                    if (byte == C_RR(0) || byte == C_RR(1) ||
-                        byte == C_REJ(0) || byte == C_REJ(1)) {
-                        cField = byte;
-                        state = C_RCV;
-                    } else if (byte == FLAG) state = FLAG_RCV;
                     else state = START;
                     break;
+                case FLAG_RCV:
+                    printf("I continue");
+                    if (byte == ADDRESS_RT) state = A_RCV;
+                    else state = START;
+                    break;
+                case A_RCV:
+                    printf("I continue3");
+                    if (byte == C_RR(0) || byte == C_RR(1) ||
+                        byte == C_REJ(0) || byte == C_REJ(1)) {
+                        printf("Correct");
+                        cField = byte;
+                        state = C_RCV;
+                    } else {state = START;
+                    printf("Incorrect, %c", byte);}
+                    break;
                 case C_RCV:
+                    printf("I continue4");
                     if (byte == (ADDRESS_RT ^ cField)) state = BCC1_OK;
-                    else if (byte == FLAG) state = FLAG_RCV;
                     else state = START;
                     break;
                 case BCC1_OK:
+                   printf("I continue5");
                     if (byte == FLAG) {
                         if (cField == C_RR((tramaTx + 1) % 2)) {
                             printf("Received RR%d → frame accepted\n", (tramaTx + 1) % 2);
@@ -248,7 +252,7 @@ int llwrite(const unsigned char *buf, int bufSize)
                         } else if (cField == C_REJ(tramaTx)) {
                             printf("Received REJ%d → retransmitting\n", tramaTx);
                         }
-                    }
+                    } else
                     state = START;
                     break;
 
@@ -331,6 +335,8 @@ int llread(unsigned char *packet)
                             ADDRESS_RT ^ C_RR(expectedNext),
                             FLAG
                         };
+                        printf("Expected next: %d", expectedNext);
+                        printf("Sending %c", rrFrame[2]);
                         writeBytesSerialPort(rrFrame, 5);
                         printf("Sent RR%d acknowledgment\n", expectedNext);
                         tramaRx = expectedNext;
@@ -401,17 +407,17 @@ int llclose(LinkLayer connectionParameters)
                 if (readByteSerialPort(&byte) <= 0) continue;
                 printf("Byte received = 0x%02X\n", byte);
                 switch (state) {
-                    case 0: if (byte == FLAG) state = 1; break;
-                    case 1: if (byte == ADDRESS_RT) state = 2; break;
-                    case 2: if (byte == CONTROL_DISC) state = 3; break;
+                    case 0: if (byte == FLAG) state = 1; else state = 0; break;
+                    case 1: if (byte == ADDRESS_RT) state = 2; else state = 0; break;
+                    case 2: if (byte == CONTROL_DISC) state = 3; else state = 0; break;
                     case 3:
-                        if (byte == (ADDRESS_RT ^ CONTROL_DISC)) state = 4;
-                        break;
+                        if (byte == (ADDRESS_RT ^ CONTROL_DISC)) state = 4; else state = 0; break;
                     case 4:
                         if (byte == FLAG) {
                             printf("Received DISC from Receiver. Sending UA.\n");
                             STOP = 1;
                         }
+                        else state = 0; 
                         break;
                 }
             }
@@ -442,7 +448,7 @@ int llclose(LinkLayer connectionParameters)
                     if (byte == FLAG) {
                         printf("Received DISC from Transmitter. Responding with DISC.\n");
                         STOP = 1;
-                    }
+                    } else state = 0; 
                     break;
             }
         }
