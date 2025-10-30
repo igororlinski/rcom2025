@@ -16,9 +16,12 @@
 #include "link_layer.h"
 #include "serial_port.h"
 
+// Frame constants
 const unsigned char FLAG = 0x7E;
 const unsigned char ADDRESS_TR = 0x03;
 const unsigned char ADDRESS_RT = 0x01;
+
+// Control field constants
 const unsigned char CONTROL_SET = 0x03;
 const unsigned char CONTROL_UA = 0x07;
 const unsigned char CONTROL_DISC = 0x0B;
@@ -27,10 +30,12 @@ const unsigned char CONTROL_RR1 = 0x85;
 const unsigned char CONTROL_REJ0 = 0x01;
 const unsigned char CONTROL_REJ1 = 0x81;
 
+// Helper macros
 #define C_RR(s) (((s) == 0) ? CONTROL_RR0 : CONTROL_RR1)
 #define C_REJ(s) (((s) == 0) ? CONTROL_REJ0 : CONTROL_REJ1)
 #define C_N(s) (((s) == 0) ? 0x00 : 0x40)
 
+// State machine for frame reception
 typedef enum
 {
     START,
@@ -43,6 +48,7 @@ typedef enum
     STOP_R
 } LinkLayerState;
 
+// Global variables for link control
 int alarmEnabled = FALSE;
 int alarmCount = 0;
 int connection_fd = -1;
@@ -52,6 +58,7 @@ int retransmissions = 3;
 int timeout = 3;
 int discReceived = 0;
 
+// Alarm handler for timeout control
 void alarmHandler(int signal)
 {
     (void)signal;
@@ -75,6 +82,7 @@ int llopen(LinkLayer connectionParameters)
     retransmissions = connectionParameters.nRetransmissions;
     timeout = connectionParameters.timeout;
 
+    // Set alarm handler
     struct sigaction act;
     memset(&act, 0, sizeof(act));
     act.sa_handler = alarmHandler;
@@ -85,15 +93,17 @@ int llopen(LinkLayer connectionParameters)
     alarmEnabled = FALSE;
     alarmCount = 0;
 
-    // Transmitter
+    // ---------- TRANSMITTER ----------
     if (connectionParameters.role == LlTx)
     {
+        // Build SET frame
         buf[0] = FLAG;
         buf[1] = ADDRESS_TR;
         buf[2] = CONTROL_SET;
         buf[3] = buf[1] ^ buf[2];
         buf[4] = FLAG;
 
+        // Send SET and wait for UA
         while (!STOP && alarmCount < retransmissions)
         {
             unsigned char byte;
@@ -159,9 +169,9 @@ int llopen(LinkLayer connectionParameters)
         printf("Connection established successfully as the transmitter\n\n");
         return fd;
     }
+    // ---------- RECEIVER ----------
     else
     {
-        // Receiver
         printf("Waiting for SET frame...\n");
         while (!STOP)
         {
@@ -205,6 +215,7 @@ int llopen(LinkLayer connectionParameters)
             }
         }
 
+        // Send UA back
         buf[0] = FLAG;
         buf[1] = ADDRESS_RT;
         buf[2] = CONTROL_UA;
@@ -227,15 +238,18 @@ int llwrite(const unsigned char *buf, int bufSize)
     unsigned char frame[MAX_PACKET_SIZE * 2];
     int frameSize = 0;
 
+    // Header
     frame[frameSize++] = FLAG;
     frame[frameSize++] = ADDRESS_TR;
     frame[frameSize++] = C_N(tramaTx);
     frame[frameSize++] = frame[1] ^ frame[2];
 
+    // Compute BCC2
     unsigned char BCC2 = buf[0];
     for (int i = 1; i < bufSize; i++)
         BCC2 ^= buf[i];
 
+    // Byte stuffing
     for (int i = 0; i < bufSize; i++)
     {
         if (buf[i] == FLAG || buf[i] == ESC)
@@ -249,6 +263,7 @@ int llwrite(const unsigned char *buf, int bufSize)
         }
     }
 
+    // Add BCC2
     if (BCC2 == FLAG || BCC2 == ESC)
     {
         frame[frameSize++] = ESC;
@@ -262,6 +277,7 @@ int llwrite(const unsigned char *buf, int bufSize)
 
     int attempts = 0, ackReceived = FALSE;
 
+    // Send frame and wait for RR/REJ
     while (attempts < retransmissions && !ackReceived)
     {
         printf("Sending I frame (Ns=%d), attempt %d\n", tramaTx, attempts + 1);
@@ -285,7 +301,8 @@ int llwrite(const unsigned char *buf, int bufSize)
                 usleep(100);
                 continue;
             }
-
+            
+            // Parse acknowledgment frame
             switch (state)
             {
             case START:
@@ -371,6 +388,7 @@ int llread(unsigned char *packet)
     unsigned char data[MAX_PACKET_SIZE];
     int dataIndex = 0;
 
+    // Receive and parse I frame
     while (1)
     {
         if (readByteSerialPort(&byte) <= 0)
@@ -422,12 +440,14 @@ int llread(unsigned char *packet)
                     dataIndex = 0;
                     break;
                 }
-
+                
+                // Check BCC2
                 unsigned char receivedBCC2 = data[dataIndex - 1];
                 unsigned char computedBCC2 = data[0];
                 for (int i = 1; i < dataIndex - 1; i++)
                     computedBCC2 ^= data[i];
 
+                // Valid data
                 if (computedBCC2 == receivedBCC2)
                 {
                     memcpy(packet, data, dataIndex - 1);
@@ -445,6 +465,7 @@ int llread(unsigned char *packet)
                     tramaRx = expectedNext;
                     return packetSize;
                 }
+                // BCC2 error → send REJ
                 else
                 {
                     printf("BCC2 error - sending REJ%d\n", tramaRx);
@@ -460,6 +481,7 @@ int llread(unsigned char *packet)
             }
             else
             {
+                // Append data byte
                 if (dataIndex < MAX_PACKET_SIZE)
                     data[dataIndex++] = byte;
                 else
@@ -494,9 +516,12 @@ int llclose(LinkLayer connectionParameters)
 
     printf("Closure procedure started\n");
 
+    // ---------- TRANSMITTER ----------
     if (connectionParameters.role == LlTx)
     {
         printf("This is the transmitter - initiating closure\n");
+
+        // Send DISC and wait for DISC response
         buf[0] = FLAG;
         buf[1] = ADDRESS_TR;
         buf[2] = CONTROL_DISC;
@@ -558,6 +583,7 @@ int llclose(LinkLayer connectionParameters)
             }
         }
 
+        // Send UA
         buf[0] = FLAG;
         buf[1] = ADDRESS_TR;
         buf[2] = CONTROL_UA;
@@ -566,10 +592,14 @@ int llclose(LinkLayer connectionParameters)
         writeBytesSerialPort(buf, 5);
         printf("Sent UA acknowledgment\n");
     }
+    // ---------- RECEIVER ----------
     else
     {
         printf("This is the receiver - waiting for a DISC from the transmitter\n");
-        if (discReceived == 0) {
+
+        // Wait for DISC (if not already received)
+        if (discReceived == 0) 
+        {
             while (!STOP)
             {
                 unsigned char byte;
@@ -610,6 +640,7 @@ int llclose(LinkLayer connectionParameters)
             printf("Disc already received during reading\n");
         }
 
+        // Send DISC back
         buf[0] = FLAG;
         buf[1] = ADDRESS_RT;
         buf[2] = CONTROL_DISC;
@@ -619,6 +650,7 @@ int llclose(LinkLayer connectionParameters)
         printf("Sending a DISC response\n");
     }
 
+    // Close port
     closeSerialPort();
     connection_fd = -1;
     printf("Connection closed successfully\n");
