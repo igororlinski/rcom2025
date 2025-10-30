@@ -1,10 +1,9 @@
-// Application layer protocol implementation for file transfer
 #include "application_layer.h"
 #include "link_layer.h" 
 #include <stdio.h>
 #include <string.h>
 
-#define BLOCK_SIZE 128 
+#define BLOCK_SIZE 512 
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
@@ -31,10 +30,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         return;
     }
     
-    printf("Connection established successfully!\n");
+    printf("Connection established successfully\n");
     
     if (strcmp(role, "tx") == 0) {
-        // TRANSMITTER: otwieramy plik i wysyłamy blokami
         FILE *file = fopen(filename, "rb");
         if (!file) {
             printf("ERROR: Could not open file %s\n", filename);
@@ -54,10 +52,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         }
 
         fclose(file);
-        printf("File transmission finished.\n");
+        printf("File transmission finished\n");
 
     } else {
-        // RECEIVER: otwieramy plik do zapisu i odbieramy blokami
         FILE *file = fopen(filename, "wb");
         if (!file) {
             printf("ERROR: Could not create file %s\n", filename);
@@ -75,7 +72,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         if (readResult < 0) {
             printf("ERROR: Failed to receive data\n");
         } else {
-            printf("File reception finished.\n");
+            printf("File reception finished\n");
         }
 
         fclose(file);
